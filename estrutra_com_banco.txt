@@ -1,0 +1,9 @@
+MinhaApiCrud/
+├── 📄 minhaapi.db              ← Banco SQLite (será criado)
+├── 📁 Migrations/              ← Pasta das migrations
+│   ├── 20240115000000_InitialCreate.cs
+│   └── AppDbContextModelSnapshot.cs
+├── 📄 Program.cs
+├── 📄 User.cs
+├── 📄 AppDbContext.cs
+└── 📄 UsersController.cs

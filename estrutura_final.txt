@@ -1,0 +1,10 @@
+MinhaApiCrud/
+├── 📄 minhaapi.db              ← Banco com dados reais!
+├── 📄 MinhaApiCrud.csproj
+├── 📄 Program.cs
+├── 📄 User.cs
+├── 📄 AppDbContext.cs
+├── 📄 UsersController.cs
+├── 📄 appsettings.json
+└── Properties/
+    └── launchSettings.json

@@ -1,0 +1,10 @@
+MinhaApiCrud/
+├── Controllers/
+│   └── UsersController.cs
+├── Models/
+│   ├── User.cs
+│   └── AppDbContext.cs
+├── Program.cs
+├── Properties/
+│   └── launchSettings.json
+└── MinhaApiCrud.csproj
