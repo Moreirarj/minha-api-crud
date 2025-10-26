@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using MinhaApiCrud;
 
 namespace MinhaApiCrud.Controllers
 {
@@ -131,6 +132,27 @@ namespace MinhaApiCrud.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, $"Erro ao deletar usuário: {ex.Message}");
+            }
+        }
+
+        // POST: api/users/reset-database
+        [HttpPost("reset-database")]
+        public async Task<ActionResult> ResetDatabase()
+        {
+            try
+            {
+                // Delete todos os usuários
+                _context.Users.RemoveRange(_context.Users);
+                await _context.SaveChangesAsync();
+                
+                // Reset sequência
+                await _context.Database.ExecuteSqlRawAsync("DELETE FROM sqlite_sequence WHERE name='Users';");
+                
+                return Ok("✅ Banco resetado completamente! IDs voltarão ao 1.");
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"❌ Erro: {ex.Message}");
             }
         }
 

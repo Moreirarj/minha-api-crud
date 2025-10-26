@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Projetos\\minha-api\\MinhaApiCrud\\MinhaApiCrud.csproj": {}
+    "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj": {}
   },
   "projects": {
-    "C:\\Projetos\\minha-api\\MinhaApiCrud\\MinhaApiCrud.csproj": {
+    "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Projetos\\minha-api\\MinhaApiCrud\\MinhaApiCrud.csproj",
+        "projectUniqueName": "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj",
         "projectName": "MinhaApiCrud",
-        "projectPath": "C:\\Projetos\\minha-api\\MinhaApiCrud\\MinhaApiCrud.csproj",
+        "projectPath": "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj",
         "packagesPath": "C:\\Users\\gabriel.flores\\.nuget\\packages\\",
-        "outputPath": "C:\\Projetos\\minha-api\\MinhaApiCrud\\obj\\",
+        "outputPath": "C:\\Users\\gabriel.flores\\minha-api-crud\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\gabriel.flores\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -32,6 +32,11 @@
           "warnAsError": [
             "NU1605"
           ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
         }
       },
       "frameworks": {
@@ -84,7 +89,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.121/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.415/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
