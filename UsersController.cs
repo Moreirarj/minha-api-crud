@@ -9,24 +9,66 @@ namespace MinhaApiCrud.Controllers
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ILogger<UsersController> _logger;
 
-        public UsersController(AppDbContext context)
+        public UsersController(AppDbContext context, ILogger<UsersController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: api/users
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> GetUsers()
+        public async Task<ActionResult<IEnumerable<User>>> GetUsers(
+            [FromQuery] string? search = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10)
         {
             try
             {
-                var users = await _context.Users.ToListAsync();
-                return Ok(users);
+                _logger.LogInformation("Buscando usuarios - Search: {Search}, Page: {Page}", search, page);
+
+                var query = _context.Users.AsQueryable();
+
+                // Filtro de busca
+                if (!string.IsNullOrEmpty(search))
+                {
+                    query = query.Where(u => 
+                        (u.Name != null && u.Name.Contains(search)) || 
+                        (u.Email != null && u.Email.Contains(search))
+                    );
+                }
+
+                // Paginacao
+                var totalCount = await query.CountAsync();
+                var users = await query
+                    .OrderBy(u => u.Id)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                // Resposta padronizada
+                var response = new
+                {
+                    Success = true,
+                    Data = users,
+                    Pagination = new
+                    {
+                        Page = page,
+                        PageSize = pageSize,
+                        TotalCount = totalCount,
+                        TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+                        HasPrevious = page > 1,
+                        HasNext = page < (int)Math.Ceiling(totalCount / (double)pageSize)
+                    }
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro interno: {ex.Message}");
+                _logger.LogError(ex, "Erro ao buscar usuarios");
+                return StatusCode(500, new { Success = false, Message = "Erro interno do servidor", Error = ex.Message });
             }
         }
 
@@ -36,18 +78,22 @@ namespace MinhaApiCrud.Controllers
         {
             try
             {
+                _logger.LogInformation("Buscando usuario com ID: {UserId}", id);
+
                 var user = await _context.Users.FindAsync(id);
 
                 if (user == null)
                 {
-                    return NotFound($"Usuário com ID {id} não encontrado");
+                    _logger.LogWarning("Usuario com ID {UserId} nao encontrado", id);
+                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
                 }
 
-                return Ok(user);
+                return Ok(new { Success = true, Data = user });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro interno: {ex.Message}");
+                _logger.LogError(ex, "Erro ao buscar usuario com ID: {UserId}", id);
+                return StatusCode(500, new { Success = false, Message = "Erro interno do servidor", Error = ex.Message });
             }
         }
 
@@ -59,18 +105,30 @@ namespace MinhaApiCrud.Controllers
             {
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(ModelState);
+                    _logger.LogWarning("Tentativa de criar usuario com dados invalidos");
+                    return BadRequest(new { Success = false, Message = "Dados invalidos", Errors = ModelState.Values.SelectMany(v => v.Errors) });
+                }
+
+                // Validacao de email unico
+                if (await _context.Users.AnyAsync(u => u.Email == user.Email))
+                {
+                    _logger.LogWarning("Tentativa de criar usuario com email duplicado: {Email}", user.Email);
+                    return Conflict(new { Success = false, Message = "Ja existe um usuario com este email" });
                 }
 
                 user.CreatedAt = DateTime.UtcNow;
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+                _logger.LogInformation("Usuario criado com ID: {UserId}", user.Id);
+
+                return CreatedAtAction(nameof(GetUser), new { id = user.Id }, 
+                    new { Success = true, Message = "Usuario criado com sucesso", Data = user });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro ao criar usuário: {ex.Message}");
+                _logger.LogError(ex, "Erro ao criar usuario");
+                return StatusCode(500, new { Success = false, Message = "Erro ao criar usuario", Error = ex.Message });
             }
         }
 
@@ -82,24 +140,38 @@ namespace MinhaApiCrud.Controllers
             {
                 if (id != user.Id)
                 {
-                    return BadRequest("ID do usuário não corresponde");
+                    _logger.LogWarning("Tentativa de atualizar usuario com ID inconsistente: {UrlId} vs {BodyId}", id, user.Id);
+                    return BadRequest(new { Success = false, Message = "ID do usuario nao corresponde" });
                 }
 
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(ModelState);
+                    return BadRequest(new { Success = false, Message = "Dados invalidos", Errors = ModelState.Values.SelectMany(v => v.Errors) });
                 }
 
-                _context.Entry(user).State = EntityState.Modified;
+                // Verifica se usuario existe antes de atualizar
+                var existingUser = await _context.Users.FindAsync(id);
+                if (existingUser == null)
+                {
+                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
+                }
+
+                // Atualiza apenas campos modificaveis (protege CreatedAt)
+                existingUser.Name = user.Name;
+                existingUser.Email = user.Email;
+                existingUser.Age = user.Age;
+
                 await _context.SaveChangesAsync();
 
-                return NoContent();
+                _logger.LogInformation("Usuario atualizado com ID: {UserId}", id);
+
+                return Ok(new { Success = true, Message = "Usuario atualizado com sucesso", Data = existingUser });
             }
             catch (DbUpdateConcurrencyException)
             {
                 if (!UserExists(id))
                 {
-                    return NotFound($"Usuário com ID {id} não encontrado");
+                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
                 }
                 else
                 {
@@ -108,7 +180,8 @@ namespace MinhaApiCrud.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro ao atualizar usuário: {ex.Message}");
+                _logger.LogError(ex, "Erro ao atualizar usuario com ID: {UserId}", id);
+                return StatusCode(500, new { Success = false, Message = "Erro ao atualizar usuario", Error = ex.Message });
             }
         }
 
@@ -121,38 +194,78 @@ namespace MinhaApiCrud.Controllers
                 var user = await _context.Users.FindAsync(id);
                 if (user == null)
                 {
-                    return NotFound($"Usuário com ID {id} não encontrado");
+                    _logger.LogWarning("Tentativa de deletar usuario nao encontrado: {UserId}", id);
+                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
                 }
 
                 _context.Users.Remove(user);
                 await _context.SaveChangesAsync();
 
-                return NoContent();
+                _logger.LogInformation("Usuario deletado com ID: {UserId}", id);
+
+                return Ok(new { Success = true, Message = "Usuario deletado com sucesso" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Erro ao deletar usuário: {ex.Message}");
+                _logger.LogError(ex, "Erro ao deletar usuario com ID: {UserId}", id);
+                return StatusCode(500, new { Success = false, Message = "Erro ao deletar usuario", Error = ex.Message });
             }
         }
 
+        
         // POST: api/users/reset-database
-        [HttpPost("reset-database")]
-        public async Task<ActionResult> ResetDatabase()
+         [HttpPost("reset-database")]
+         public async Task<ActionResult> ResetDatabase()
+ {
+         try
+      {
+        // Método mais simples - apenas deleta e recria o banco
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+
+        // Adiciona dados de exemplo
+        _context.Users.AddRange(
+            new User { Name = "João Silva", Email = "joao@email.com", Age = 30 },
+            new User { Name = "Maria Santos", Email = "maria@email.com", Age = 25 },
+            new User { Name = "Pedro Oliveira", Email = "pedro@email.com", Age = 35 }
+        );
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Success = true, Message = "Banco resetado e recriado com sucesso!" });
+    }
+    catch (Exception ex)
+    {
+        return BadRequest(new { Success = false, Message = $"Erro: {ex.Message}" });
+    }
+}
+        // NOVO ENDPOINT - Busca avancada
+        [HttpGet("search")]
+        public async Task<ActionResult<IEnumerable<User>>> SearchUsers(
+            [FromQuery] string q,
+            [FromQuery] int limit = 20)
         {
             try
             {
-                // Delete todos os usuários
-                _context.Users.RemoveRange(_context.Users);
-                await _context.SaveChangesAsync();
-                
-                // Reset sequência
-                await _context.Database.ExecuteSqlRawAsync("DELETE FROM sqlite_sequence WHERE name='Users';");
-                
-                return Ok("✅ Banco resetado completamente! IDs voltarão ao 1.");
+                if (string.IsNullOrEmpty(q) || q.Length < 2)
+                {
+                    return BadRequest(new { Success = false, Message = "Termo de busca deve ter pelo menos 2 caracteres" });
+                }
+
+                var users = await _context.Users
+                    .Where(u => 
+                        (u.Name != null && u.Name.Contains(q)) || 
+                        (u.Email != null && u.Email.Contains(q)))
+                    .Take(limit)
+                    .ToListAsync();
+
+                _logger.LogInformation("Busca por '{SearchTerm}' retornou {ResultCount} resultados", q, users.Count);
+
+                return Ok(new { Success = true, Data = users, SearchTerm = q, Count = users.Count });
             }
             catch (Exception ex)
             {
-                return BadRequest($"❌ Erro: {ex.Message}");
+                _logger.LogError(ex, "Erro na busca por: {SearchTerm}", q);
+                return StatusCode(500, new { Success = false, Message = "Erro na busca", Error = ex.Message });
             }
         }
 
