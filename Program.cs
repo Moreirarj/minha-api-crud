@@ -1,25 +1,37 @@
 using Microsoft.EntityFrameworkCore;
 using MinhaApiCrud;
+using MinhaApiCrud.Hubs; // 👈 Import do Hub
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
+// ======================
+// SERVICES
+// ======================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure Entity Framework with SQLite
+// Banco de Dados SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=minhaapi.db"));
 
-// NOVAS ADIÇÕES (CORRIGIDAS)
-builder.Services.AddHealthChecks(); // Health Check básico sem Entity Framework
-builder.Services.AddCors(options => 
-    options.AddPolicy("AllowAll", policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+// Health Check e CORS
+builder.Services.AddHealthChecks();
+builder.Services.AddCors(options =>
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader()));
 
+// 👇 Adiciona o SignalR
+builder.Services.AddSignalR();
+
+// ======================
+// APP
+// ======================
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
+// Swagger em ambiente de dev
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -27,39 +39,36 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-// NOVOS MIDDLEWARES
 app.UseCors("AllowAll");
-app.MapHealthChecks("/health"); // Health Check básico
-
+app.MapHealthChecks("/health");
 app.UseAuthorization();
 app.MapControllers();
 
-// Simple database initialization - NO MIGRATIONS NEEDED
+// 👇 Mapeia o Hub do SignalR
+app.MapHub<UserHub>("/hubs/users");
+
+// ======================
+// BANCO DE DADOS
+// ======================
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    
+
     try
     {
-        // This creates the database and tables without migrations
         bool created = dbContext.Database.EnsureCreated();
         Console.WriteLine(created ? "Database created successfully!" : "Database already exists!");
-        
-        // Test connection
+
         bool canConnect = dbContext.Database.CanConnect();
         Console.WriteLine(canConnect ? "Can connect to database!" : "Cannot connect to database!");
-        
-        // List all tables (for debugging)
+
         var usersCount = dbContext.Users.Count();
         Console.WriteLine($"Total users in database: {usersCount}");
-        
-        // Seed de dados iniciais (OPCIONAL)
+
+        // Seed inicial
         if (created || usersCount == 0)
         {
             Console.WriteLine("Seeding initial data...");
-            
-            // Adiciona alguns usuarios de exemplo se a tabela estiver vazia
             if (!dbContext.Users.Any())
             {
                 dbContext.Users.AddRange(
@@ -78,23 +87,29 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// NOVO ENDPOINT RAIZ (OPCIONAL)
-app.MapGet("/", () => {
+// ======================
+// ENDPOINT RAIZ
+// ======================
+app.MapGet("/", () =>
+{
     var startupTime = DateTime.UtcNow;
-    return new {
+    return new
+    {
         Message = "Minha API CRUD está rodando!",
         Version = "v1.0",
         Environment = app.Environment.EnvironmentName,
         StartupTime = startupTime,
         Uptime = DateTime.UtcNow - startupTime,
-        Endpoints = new[] {
+        Endpoints = new[]
+        {
             "GET /swagger - Documentação interativa",
-            "GET /health - Status da API", 
-            "GET /api/users - Listar usuarios",
-            "GET /api/users/{id} - Buscar usuario",
-            "POST /api/users - Criar usuario",
-            "PUT /api/users/{id} - Atualizar usuario",
-            "DELETE /api/users/{id} - Deletar usuario"
+            "GET /health - Status da API",
+            "GET /api/users - Listar usuários",
+            "GET /api/users/{id} - Buscar usuário",
+            "POST /api/users - Criar usuário",
+            "PUT /api/users/{id} - Atualizar usuário",
+            "DELETE /api/users/{id} - Deletar usuário",
+            "SignalR Hub: /hubs/users"
         }
     };
 });

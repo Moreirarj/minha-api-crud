@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using MinhaApiCrud;
+using MinhaApiCrud.Hubs;
 
 namespace MinhaApiCrud.Controllers
 {
@@ -10,11 +12,13 @@ namespace MinhaApiCrud.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<UsersController> _logger;
+        private readonly IHubContext<UserHub> _hubContext;
 
-        public UsersController(AppDbContext context, ILogger<UsersController> logger)
+        public UsersController(AppDbContext context, ILogger<UsersController> logger, IHubContext<UserHub> hubContext)
         {
             _context = context;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         // GET: api/users
@@ -33,13 +37,13 @@ namespace MinhaApiCrud.Controllers
                 // Filtro de busca
                 if (!string.IsNullOrEmpty(search))
                 {
-                    query = query.Where(u => 
-                        (u.Name != null && u.Name.Contains(search)) || 
+                    query = query.Where(u =>
+                        (u.Name != null && u.Name.Contains(search)) ||
                         (u.Email != null && u.Email.Contains(search))
                     );
                 }
 
-                // Paginacao
+                // Paginação
                 var totalCount = await query.CountAsync();
                 var users = await query
                     .OrderBy(u => u.Id)
@@ -47,7 +51,6 @@ namespace MinhaApiCrud.Controllers
                     .Take(pageSize)
                     .ToListAsync();
 
-                // Resposta padronizada
                 var response = new
                 {
                     Success = true,
@@ -109,11 +112,11 @@ namespace MinhaApiCrud.Controllers
                     return BadRequest(new { Success = false, Message = "Dados invalidos", Errors = ModelState.Values.SelectMany(v => v.Errors) });
                 }
 
-                // Validacao de email unico
+                // Validação de email único
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email))
                 {
                     _logger.LogWarning("Tentativa de criar usuario com email duplicado: {Email}", user.Email);
-                    return Conflict(new { Success = false, Message = "Ja existe um usuario com este email" });
+                    return Conflict(new { Success = false, Message = "Já existe um usuario com este email" });
                 }
 
                 user.CreatedAt = DateTime.UtcNow;
@@ -122,7 +125,10 @@ namespace MinhaApiCrud.Controllers
 
                 _logger.LogInformation("Usuario criado com ID: {UserId}", user.Id);
 
-                return CreatedAtAction(nameof(GetUser), new { id = user.Id }, 
+                // 🚀 Envia notificação em tempo real
+                await _hubContext.Clients.All.SendAsync("UserAdded", user);
+
+                return CreatedAtAction(nameof(GetUser), new { id = user.Id },
                     new { Success = true, Message = "Usuario criado com sucesso", Data = user });
             }
             catch (Exception ex)
@@ -144,19 +150,12 @@ namespace MinhaApiCrud.Controllers
                     return BadRequest(new { Success = false, Message = "ID do usuario nao corresponde" });
                 }
 
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest(new { Success = false, Message = "Dados invalidos", Errors = ModelState.Values.SelectMany(v => v.Errors) });
-                }
-
-                // Verifica se usuario existe antes de atualizar
                 var existingUser = await _context.Users.FindAsync(id);
                 if (existingUser == null)
                 {
                     return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
                 }
 
-                // Atualiza apenas campos modificaveis (protege CreatedAt)
                 existingUser.Name = user.Name;
                 existingUser.Email = user.Email;
                 existingUser.Age = user.Age;
@@ -165,18 +164,10 @@ namespace MinhaApiCrud.Controllers
 
                 _logger.LogInformation("Usuario atualizado com ID: {UserId}", id);
 
+                // 🚀 Notifica atualização
+                await _hubContext.Clients.All.SendAsync("UserUpdated", existingUser);
+
                 return Ok(new { Success = true, Message = "Usuario atualizado com sucesso", Data = existingUser });
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!UserExists(id))
-                {
-                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
-                }
-                else
-                {
-                    throw;
-                }
             }
             catch (Exception ex)
             {
@@ -203,6 +194,9 @@ namespace MinhaApiCrud.Controllers
 
                 _logger.LogInformation("Usuario deletado com ID: {UserId}", id);
 
+                // 🚀 Notifica exclusão
+                await _hubContext.Clients.All.SendAsync("UserDeleted", id);
+
                 return Ok(new { Success = true, Message = "Usuario deletado com sucesso" });
             }
             catch (Exception ex)
@@ -212,33 +206,34 @@ namespace MinhaApiCrud.Controllers
             }
         }
 
-        
         // POST: api/users/reset-database
-         [HttpPost("reset-database")]
-         public async Task<ActionResult> ResetDatabase()
- {
-         try
-      {
-        // Método mais simples - apenas deleta e recria o banco
-        await _context.Database.EnsureDeletedAsync();
-        await _context.Database.EnsureCreatedAsync();
+        [HttpPost("reset-database")]
+        public async Task<ActionResult> ResetDatabase()
+        {
+            try
+            {
+                await _context.Database.EnsureDeletedAsync();
+                await _context.Database.EnsureCreatedAsync();
 
-        // Adiciona dados de exemplo
-        _context.Users.AddRange(
-            new User { Name = "João Silva", Email = "joao@email.com", Age = 30 },
-            new User { Name = "Maria Santos", Email = "maria@email.com", Age = 25 },
-            new User { Name = "Pedro Oliveira", Email = "pedro@email.com", Age = 35 }
-        );
-        await _context.SaveChangesAsync();
+                _context.Users.AddRange(
+                    new User { Name = "João Silva", Email = "joao@email.com", Age = 30 },
+                    new User { Name = "Maria Santos", Email = "maria@email.com", Age = 25 },
+                    new User { Name = "Pedro Oliveira", Email = "pedro@email.com", Age = 35 }
+                );
+                await _context.SaveChangesAsync();
 
-        return Ok(new { Success = true, Message = "Banco resetado e recriado com sucesso!" });
-    }
-    catch (Exception ex)
-    {
-        return BadRequest(new { Success = false, Message = $"Erro: {ex.Message}" });
-    }
-}
-        // NOVO ENDPOINT - Busca avancada
+                // 🚀 Atualiza todos os clientes com os novos dados
+                await _hubContext.Clients.All.SendAsync("DatabaseReset");
+
+                return Ok(new { Success = true, Message = "Banco resetado e recriado com sucesso!" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Success = false, Message = $"Erro: {ex.Message}" });
+            }
+        }
+
+        // GET: api/users/search
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<User>>> SearchUsers(
             [FromQuery] string q,
@@ -252,8 +247,8 @@ namespace MinhaApiCrud.Controllers
                 }
 
                 var users = await _context.Users
-                    .Where(u => 
-                        (u.Name != null && u.Name.Contains(q)) || 
+                    .Where(u =>
+                        (u.Name != null && u.Name.Contains(q)) ||
                         (u.Email != null && u.Email.Contains(q)))
                     .Take(limit)
                     .ToListAsync();

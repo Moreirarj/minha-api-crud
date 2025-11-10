@@ -392,3 +392,8 @@ C:\Projetos\minha-api\MinhaApiCrud\obj\Debug\net8.0\refint\MinhaApiCrud.dll
 C:\Projetos\minha-api\MinhaApiCrud\obj\Debug\net8.0\MinhaApiCrud.pdb
 C:\Projetos\minha-api\MinhaApiCrud\obj\Debug\net8.0\MinhaApiCrud.genruntimeconfig.cache
 C:\Projetos\minha-api\MinhaApiCrud\obj\Debug\net8.0\ref\MinhaApiCrud.dll
+C:\Users\gabriel.flores\minha-api-crud\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.Abstractions.dll
+C:\Users\gabriel.flores\minha-api-crud\bin\Debug\net8.0\Microsoft.Extensions.Hosting.Abstractions.dll
+C:\Users\gabriel.flores\minha-api-crud\bin\Debug\net8.0\Microsoft.Extensions.ObjectPool.dll
+C:\Users\gabriel.flores\minha-api-crud\bin\Debug\net8.0\Newtonsoft.Json.dll
+C:\Users\gabriel.flores\minha-api-crud\bin\Debug\net8.0\System.Net.WebSockets.WebSocketProtocol.dll
