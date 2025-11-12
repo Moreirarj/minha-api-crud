@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MinhaApiCrud.Models;
 
 namespace MinhaApiCrud
 {
@@ -18,56 +19,33 @@ namespace MinhaApiCrud
             }
         }
 
-        // 🔥🔥🔥 ADICIONE ESTE MÉTODO PARA CONFIGURAÇÕES DO MODELO
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configuração da entidade User
             modelBuilder.Entity<User>(entity =>
             {
-                // 🔥 Chave primária
                 entity.HasKey(e => e.Id);
 
-                // 🔥 Configurações do campo Name
                 entity.Property(e => e.Name)
-                    .IsRequired() // Torna obrigatório
-                    .HasMaxLength(100) // Define tamanho máximo
-                    .HasColumnType("TEXT"); // Tipo específico do SQLite
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("TEXT");
 
-                // 🔥 Configurações do campo Email
                 entity.Property(e => e.Email)
-                    .IsRequired() // Torna obrigatório
-                    .HasMaxLength(150) // Define tamanho máximo
-                    .HasColumnType("TEXT"); // Tipo específico do SQLite
+                    .IsRequired()
+                    .HasMaxLength(150)
+                    .HasColumnType("TEXT");
 
-                // 🔥 Índice único para Email (evita duplicatas)
                 entity.HasIndex(e => e.Email)
                     .IsUnique();
 
-                // 🔥 Configurações do campo CreatedAt
                 entity.Property(e => e.CreatedAt)
                     .IsRequired()
-                    .HasDefaultValueSql("datetime('now')"); // Valor padrão no SQLite
-
-                // 🔥 NOVO - Campo UpdatedAt (se você adicionar na classe User)
-                // entity.Property(e => e.UpdatedAt)
-                //     .IsRequired(false); // Opcional se você adicionar depois
+                    .HasDefaultValueSql("datetime('now')");
             });
-
-            // 🔥🔥🔥 ADICIONE ESTE COMENTÁRIO PARA FUTURAS ENTIDADES
-            /*
-            // Exemplo para quando adicionar novas entidades:
-            modelBuilder.Entity<Product>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-                entity.HasIndex(e => e.Name);
-            });
-            */
         }
 
-        // 🔥🔥🔥 ADICIONE ESTE MÉTODO PARA ATUALIZAR TIMESTAMPS AUTOMATICAMENTE
         public override int SaveChanges()
         {
             UpdateTimestamps();
@@ -80,7 +58,6 @@ namespace MinhaApiCrud
             return base.SaveChangesAsync(cancellationToken);
         }
 
-        // 🔥🔥🔥 MÉTODO PARA ATUALIZAR DATAS AUTOMATICAMENTE
         private void UpdateTimestamps()
         {
             var entries = ChangeTracker.Entries()
@@ -95,13 +72,9 @@ namespace MinhaApiCrud
                 {
                     user.CreatedAt = DateTime.UtcNow;
                 }
-                
-                // 🔥 NOVO - Se você adicionar UpdatedAt na classe User depois:
-                // user.UpdatedAt = DateTime.UtcNow;
             }
         }
 
-        // 🔥🔥🔥 MÉTODO UTILITÁRIO PARA HEALTH CHECKS
         public async Task<bool> CanConnectAsync()
         {
             try
@@ -114,7 +87,6 @@ namespace MinhaApiCrud
             }
         }
 
-        // 🔥🔥🔥 MÉTODO PARA OBTER ESTATÍSTICAS DO BANCO (OPCIONAL)
         public async Task<object> GetDatabaseStats()
         {
             var userCount = await Users.CountAsync();

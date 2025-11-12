@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MinhaApiCrud;
-using MinhaApiCrud.Hubs; // 👈 Import do Hub
+using MinhaApiCrud.Hubs;
+using MinhaApiCrud.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -72,9 +73,9 @@ using (var scope = app.Services.CreateScope())
             if (!dbContext.Users.Any())
             {
                 dbContext.Users.AddRange(
-                    new User { Name = "João Silva", Email = "joao@email.com", Age = 30 },
-                    new User { Name = "Maria Santos", Email = "maria@email.com", Age = 25 },
-                    new User { Name = "Pedro Oliveira", Email = "pedro@email.com", Age = 35 }
+                    new User { Name = "João Silva", Email = "joao.silva@email.com", Age = 38 },
+                    new User { Name = "Maria Santos", Email = "maria.santos@email.com", Age = 28 },
+                    new User { Name = "Pedro Oliveira", Email = "pedro.oliveira@email.com", Age = 32 }
                 );
                 await dbContext.SaveChangesAsync();
                 Console.WriteLine($"Added {dbContext.Users.Count()} sample users!");

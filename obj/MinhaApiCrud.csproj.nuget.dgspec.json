@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj": {}
+    "C:\\Projetos\\minha-api\\minha-api-crud\\MinhaApiCrud.csproj": {}
   },
   "projects": {
-    "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj": {
+    "C:\\Projetos\\minha-api\\minha-api-crud\\MinhaApiCrud.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj",
+        "projectUniqueName": "C:\\Projetos\\minha-api\\minha-api-crud\\MinhaApiCrud.csproj",
         "projectName": "MinhaApiCrud",
-        "projectPath": "C:\\Users\\gabriel.flores\\minha-api-crud\\MinhaApiCrud.csproj",
+        "projectPath": "C:\\Projetos\\minha-api\\minha-api-crud\\MinhaApiCrud.csproj",
         "packagesPath": "C:\\Users\\gabriel.flores\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\gabriel.flores\\minha-api-crud\\obj\\",
+        "outputPath": "C:\\Projetos\\minha-api\\minha-api-crud\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\gabriel.flores\\AppData\\Roaming\\NuGet\\NuGet.Config"

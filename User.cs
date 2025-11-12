@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace MinhaApiCrud
+namespace MinhaApiCrud.Models
 {
     public class User
     {

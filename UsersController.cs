@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
-using MinhaApiCrud;
+using Microsoft.EntityFrameworkCore;
 using MinhaApiCrud.Hubs;
+using MinhaApiCrud.Models;
 
 namespace MinhaApiCrud.Controllers
 {
@@ -21,252 +21,136 @@ namespace MinhaApiCrud.Controllers
             _hubContext = hubContext;
         }
 
-        // GET: api/users
+        // GET: api/Users
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> GetUsers(
-            [FromQuery] string? search = null,
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+        public async Task<ActionResult<IEnumerable<UserResponse>>> GetUsers()
         {
-            try
-            {
-                _logger.LogInformation("Buscando usuarios - Search: {Search}, Page: {Page}", search, page);
-
-                var query = _context.Users.AsQueryable();
-
-                // Filtro de busca
-                if (!string.IsNullOrEmpty(search))
-                {
-                    query = query.Where(u =>
-                        (u.Name != null && u.Name.Contains(search)) ||
-                        (u.Email != null && u.Email.Contains(search))
-                    );
-                }
-
-                // Paginação
-                var totalCount = await query.CountAsync();
-                var users = await query
-                    .OrderBy(u => u.Id)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .ToListAsync();
-
-                var response = new
-                {
-                    Success = true,
-                    Data = users,
-                    Pagination = new
-                    {
-                        Page = page,
-                        PageSize = pageSize,
-                        TotalCount = totalCount,
-                        TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
-                        HasPrevious = page > 1,
-                        HasNext = page < (int)Math.Ceiling(totalCount / (double)pageSize)
-                    }
-                };
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao buscar usuarios");
-                return StatusCode(500, new { Success = false, Message = "Erro interno do servidor", Error = ex.Message });
-            }
+            _logger.LogInformation("📋 Buscando todos os usuários");
+            var users = await _context.Users.Where(u => u.IsActive).ToListAsync();
+            return users.Select(UserResponse.FromUser).ToList();
         }
 
-        // GET: api/users/5
+        // GET: api/Users/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<User>> GetUser(int id)
+        public async Task<ActionResult<UserResponse>> GetUser(int id)
         {
-            try
+            _logger.LogInformation($"🔍 Buscando usuário com ID: {id}");
+            
+            var user = await _context.Users.FindAsync(id);
+
+            if (user == null || !user.IsActive)
             {
-                _logger.LogInformation("Buscando usuario com ID: {UserId}", id);
-
-                var user = await _context.Users.FindAsync(id);
-
-                if (user == null)
-                {
-                    _logger.LogWarning("Usuario com ID {UserId} nao encontrado", id);
-                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
-                }
-
-                return Ok(new { Success = true, Data = user });
+                _logger.LogWarning($"❌ Usuário com ID {id} não encontrado");
+                return NotFound();
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao buscar usuario com ID: {UserId}", id);
-                return StatusCode(500, new { Success = false, Message = "Erro interno do servidor", Error = ex.Message });
-            }
+
+            _logger.LogInformation($"✅ Usuário encontrado: {user.Name}");
+            return UserResponse.FromUser(user);
         }
 
-        // POST: api/users
+        // POST: api/Users
         [HttpPost]
-        public async Task<ActionResult<User>> CreateUser(User user)
+        public async Task<ActionResult<UserResponse>> CreateUser(CreateUserRequest createRequest)
         {
-            try
+            _logger.LogInformation("🆕 Criando novo usuário");
+            
+            var user = new User
             {
-                if (!ModelState.IsValid)
-                {
-                    _logger.LogWarning("Tentativa de criar usuario com dados invalidos");
-                    return BadRequest(new { Success = false, Message = "Dados invalidos", Errors = ModelState.Values.SelectMany(v => v.Errors) });
-                }
+                Name = createRequest.Name,
+                Email = createRequest.Email,
+                Age = createRequest.Age,
+                Phone = createRequest.Phone,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
 
-                // Validação de email único
-                if (await _context.Users.AnyAsync(u => u.Email == user.Email))
-                {
-                    _logger.LogWarning("Tentativa de criar usuario com email duplicado: {Email}", user.Email);
-                    return Conflict(new { Success = false, Message = "Já existe um usuario com este email" });
-                }
-
-                user.CreatedAt = DateTime.UtcNow;
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Usuario criado com ID: {UserId}", user.Id);
-
-                // 🚀 Envia notificação em tempo real
-                await _hubContext.Clients.All.SendAsync("UserAdded", user);
-
-                return CreatedAtAction(nameof(GetUser), new { id = user.Id },
-                    new { Success = true, Message = "Usuario criado com sucesso", Data = user });
-            }
-            catch (Exception ex)
+            if (!user.IsValid())
             {
-                _logger.LogError(ex, "Erro ao criar usuario");
-                return StatusCode(500, new { Success = false, Message = "Erro ao criar usuario", Error = ex.Message });
+                _logger.LogWarning("❌ Dados do usuário inválidos");
+                return BadRequest("Dados do usuário inválidos");
             }
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            // Notificar via SignalR
+            await _hubContext.Clients.All.SendAsync("UserCreated", UserResponse.FromUser(user));
+
+            _logger.LogInformation($"✅ Usuário criado com ID: {user.Id}");
+            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, UserResponse.FromUser(user));
         }
 
-        // PUT: api/users/5
+        // PUT: api/Users/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateUser(int id, User user)
+        public async Task<IActionResult> UpdateUser(int id, UpdateUserRequest updateRequest)
         {
-            try
+            _logger.LogInformation($"✏️ Atualizando usuário com ID: {id}");
+
+            var user = await _context.Users.FindAsync(id);
+            if (user == null || !user.IsActive)
             {
-                if (id != user.Id)
-                {
-                    _logger.LogWarning("Tentativa de atualizar usuario com ID inconsistente: {UrlId} vs {BodyId}", id, user.Id);
-                    return BadRequest(new { Success = false, Message = "ID do usuario nao corresponde" });
-                }
-
-                var existingUser = await _context.Users.FindAsync(id);
-                if (existingUser == null)
-                {
-                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
-                }
-
-                existingUser.Name = user.Name;
-                existingUser.Email = user.Email;
-                existingUser.Age = user.Age;
-
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Usuario atualizado com ID: {UserId}", id);
-
-                // 🚀 Notifica atualização
-                await _hubContext.Clients.All.SendAsync("UserUpdated", existingUser);
-
-                return Ok(new { Success = true, Message = "Usuario atualizado com sucesso", Data = existingUser });
+                _logger.LogWarning($"❌ Usuário com ID {id} não encontrado para atualização");
+                return NotFound();
             }
-            catch (Exception ex)
+
+            // Atualiza apenas as propriedades que foram fornecidas
+            if (!string.IsNullOrEmpty(updateRequest.Name))
+                user.Name = updateRequest.Name;
+            
+            if (!string.IsNullOrEmpty(updateRequest.Email))
+                user.Email = updateRequest.Email;
+            
+            if (updateRequest.Age.HasValue)
+                user.Age = updateRequest.Age.Value;
+            
+            if (updateRequest.Phone != null)
+                user.Phone = updateRequest.Phone;
+
+            user.UpdateTimestamp();
+
+            if (!user.IsValid())
             {
-                _logger.LogError(ex, "Erro ao atualizar usuario com ID: {UserId}", id);
-                return StatusCode(500, new { Success = false, Message = "Erro ao atualizar usuario", Error = ex.Message });
+                _logger.LogWarning("❌ Dados atualizados do usuário são inválidos");
+                return BadRequest("Dados do usuário inválidos");
             }
+
+            _logger.LogInformation("🔄 Salvando alterações...");
+            await _context.SaveChangesAsync();
+
+            // Notificar via SignalR
+            await _hubContext.Clients.All.SendAsync("UserUpdated", UserResponse.FromUser(user));
+
+            _logger.LogInformation("✅ UPDATE CONCLUÍDO com sucesso!");
+            return NoContent();
         }
 
-        // DELETE: api/users/5
+        // DELETE: api/Users/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            try
+            _logger.LogInformation($"🗑️ Excluindo usuário com ID: {id}");
+            
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
             {
-                var user = await _context.Users.FindAsync(id);
-                if (user == null)
-                {
-                    _logger.LogWarning("Tentativa de deletar usuario nao encontrado: {UserId}", id);
-                    return NotFound(new { Success = false, Message = $"Usuario com ID {id} nao encontrado" });
-                }
-
-                _context.Users.Remove(user);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Usuario deletado com ID: {UserId}", id);
-
-                // 🚀 Notifica exclusão
-                await _hubContext.Clients.All.SendAsync("UserDeleted", id);
-
-                return Ok(new { Success = true, Message = "Usuario deletado com sucesso" });
+                _logger.LogWarning($"❌ Usuário com ID {id} não encontrado para exclusão");
+                return NotFound();
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao deletar usuario com ID: {UserId}", id);
-                return StatusCode(500, new { Success = false, Message = "Erro ao deletar usuario", Error = ex.Message });
-            }
-        }
 
-        // POST: api/users/reset-database
-        [HttpPost("reset-database")]
-        public async Task<ActionResult> ResetDatabase()
-        {
-            try
-            {
-                await _context.Database.EnsureDeletedAsync();
-                await _context.Database.EnsureCreatedAsync();
+            // Soft delete (apenas desativa)
+            user.Deactivate();
+            await _context.SaveChangesAsync();
 
-                _context.Users.AddRange(
-                    new User { Name = "João Silva", Email = "joao@email.com", Age = 30 },
-                    new User { Name = "Maria Santos", Email = "maria@email.com", Age = 25 },
-                    new User { Name = "Pedro Oliveira", Email = "pedro@email.com", Age = 35 }
-                );
-                await _context.SaveChangesAsync();
+            // Notificar via SignalR
+            await _hubContext.Clients.All.SendAsync("UserDeleted", id);
 
-                // 🚀 Atualiza todos os clientes com os novos dados
-                await _hubContext.Clients.All.SendAsync("DatabaseReset");
-
-                return Ok(new { Success = true, Message = "Banco resetado e recriado com sucesso!" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { Success = false, Message = $"Erro: {ex.Message}" });
-            }
-        }
-
-        // GET: api/users/search
-        [HttpGet("search")]
-        public async Task<ActionResult<IEnumerable<User>>> SearchUsers(
-            [FromQuery] string q,
-            [FromQuery] int limit = 20)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(q) || q.Length < 2)
-                {
-                    return BadRequest(new { Success = false, Message = "Termo de busca deve ter pelo menos 2 caracteres" });
-                }
-
-                var users = await _context.Users
-                    .Where(u =>
-                        (u.Name != null && u.Name.Contains(q)) ||
-                        (u.Email != null && u.Email.Contains(q)))
-                    .Take(limit)
-                    .ToListAsync();
-
-                _logger.LogInformation("Busca por '{SearchTerm}' retornou {ResultCount} resultados", q, users.Count);
-
-                return Ok(new { Success = true, Data = users, SearchTerm = q, Count = users.Count });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro na busca por: {SearchTerm}", q);
-                return StatusCode(500, new { Success = false, Message = "Erro na busca", Error = ex.Message });
-            }
+            _logger.LogInformation($"✅ Usuário com ID {id} excluído com sucesso");
+            return NoContent();
         }
 
         private bool UserExists(int id)
         {
-            return _context.Users.Any(e => e.Id == id);
+            return _context.Users.Any(e => e.Id == id && e.IsActive);
         }
     }
 }
